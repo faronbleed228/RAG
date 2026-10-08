@@ -6,7 +6,7 @@ from sys import stderr
 if __name__ == "__main__":
     try:
         fire.Fire({
-            "index": IndexChunks().index
+            "index": IndexChunks(2000).index
         })
     except IndexingException as e:
         print(e, file=stderr)
