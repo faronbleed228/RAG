@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from pathlib import Path
 import regex as re
 import ast
-from typing import Literal
 
 
 class MinimalSource(BaseModel):
@@ -26,6 +25,8 @@ class IndexChunks():
         self.absolute_path: Path = Path(__file__).resolve().parent.parent
         self.data_path: Path = Path(__file__).resolve().parent.parent / \
             "data" / "raw" / "vllm-0.10.1"
+        self.test_path: Path = Path(__file__).resolve(
+        ).parent.parent / "tests" / "fixtures"
         self.relative_path: str
 
         self.start_index: int = 0
@@ -55,13 +56,11 @@ class IndexChunks():
                     self.general_index += 1
 
                 self._reset()
-        for file in self.data_path.glob("chunking_sample.py"):
+        for file in self.test_path.glob("chunking_sample.py"):
             with open(file, mode="r", encoding="utf-8") as fd:
-                while chunk := fd.read():
-                    self._get_code_chunk(chunk, file)
-                    self.general_index += 1
-                if self.remaining_chunk:
-                    pass
+                chunk = fd.read()
+                self._get_code_chunk(chunk, file)
+                self.general_index += 1
                 self._reset()
 
         for chunk in self.chunk_list:
@@ -167,11 +166,8 @@ class IndexChunks():
             last_state = cur_state
             cur_state = type(node)
 
-            if (last_state == ast.ImportFrom and cur_state == ast.Import or
-                    cur_state == ast.ImportFrom and last_state == ast.Import):
-                import_types = True
-            else:
-                import_types = False
+            import_types = (last_state in (ast.ImportFrom, ast.Import)
+                            and cur_state in (ast.Import, ast.ImportFrom))
 
             last_line_index = node.lineno - 1
 
@@ -186,7 +182,6 @@ class IndexChunks():
 
             cur_chunk_size = len("".join(
                 line_list[first_line_index:last_line_index]))
-            print(cur_chunk_size)
             if cur_chunk_size >= self.max_chunk_size:
                 print(cur_state)
                 print(last_state)
@@ -207,15 +202,15 @@ class IndexChunks():
                 new_logical_node = False
 
         if self.end_index != len(chunk):
-            self._get_code_data_chunk(
-                line_list, first_line_index,
-                len(line_list))
+            self._split_code_chunk(first_line_index,
+                                   len(line_list), line_list, cur_state)
 
     def _get_code_data_chunk(self, line_list: list[str],
                              first_line_index: int,
-                             last_line_index: int) -> None:
-        content = "".join(
-            line_list[first_line_index:last_line_index])
+                             last_line_index: int, content: str | None = None) -> None:
+        if content is None:
+            content = "".join(
+                line_list[first_line_index:last_line_index])
         self.end_index += len(content)
 
         data_chunk = DataChunk(index=self.general_index,
@@ -225,41 +220,85 @@ class IndexChunks():
                                    first_character_index=self.start_index,
                                    last_character_index=self.end_index))
         self.chunk_list.append(data_chunk)
-
+        cur_chunk_size = len(content)
+        print(f"Chunk size: {cur_chunk_size}")
         print(
             f"Data chunk indexes: {data_chunk.min_source.first_character_index}, {data_chunk.min_source.last_character_index}")
-        print(
-            f"Data chunk content:\n{content}", end="")
+        if content.endswith("\n"):
+            print(
+                f"Data chunk content:\n{content}", end="")
+        else:
+            print(
+                f"Data chunk content:\n{content}")
         self.general_index += 1
         self.start_index = self.end_index
 
     def _split_code_chunk(self, start_line_index: int, end_line_index: int,
-                          line_list: list[str], last_state: type | None) -> None:
-        print("splitingggg")
+                          line_list: list[str],
+                          last_state: type | None) -> None:
+        if len("".join(line_list[start_line_index:end_line_index])) <= self.max_chunk_size:
+            self._get_code_data_chunk(
+                line_list, start_line_index, end_line_index)
+            return
         last_logical_index: int = -1
-
-        if isinstance(last_state, ast.ClassDef):
+        print(last_state)
+        if last_state == ast.ClassDef:
             for index, line in enumerate(line_list[start_line_index:end_line_index]):
-                if line.startswith(("def")):
-                    last_logical_index = index + start_line_index
-                    break
+                clean_line = line.lstrip(" \t").rstrip("\n")
+                if clean_line.startswith(("def ")):
+                    if len("".join(line_list[start_line_index:index + start_line_index])) > self.max_chunk_size:
+                        break
+                    else:
+                        last_logical_index = index + start_line_index
 
-        elif (isinstance(last_state, (ast.FunctionDef, ast.AsyncFunctionDef))
-              or last_logical_index == -1):
-            print("aaaa")
+        elif last_state in (ast.FunctionDef, ast.AsyncFunctionDef):
             for index, line in enumerate(line_list[start_line_index:end_line_index]):
                 clean_line = line.lstrip(" \t").rstrip("\n")
                 if (clean_line.startswith(("for", "while", "try", "if"))
                         and clean_line.endswith(":")):
                     last_logical_index = index + start_line_index
                     break
+        if last_logical_index == -1:
+            for index, line in enumerate(line_list[start_line_index:end_line_index]):
+                if len("".join(line_list[start_line_index:index + start_line_index])) > self.max_chunk_size:
+                    break
+                else:
+                    last_logical_index = index + start_line_index
 
-        self._get_code_data_chunk(
-            line_list, start_line_index, last_logical_index)
-        if len("".join(line_list[last_logical_index:end_line_index])) > self.max_chunk_size:
-            pass
-            # self._split_code_chunk(
-            #   last_logical_index, end_line_index, line_list, last_state)
+        if last_logical_index > start_line_index:
+            self._get_code_data_chunk(
+                line_list, start_line_index, last_logical_index)
 
-        self._get_code_data_chunk(
-            line_list, last_logical_index, end_line_index)
+            if len("".join(line_list[last_logical_index:end_line_index])) > self.max_chunk_size:
+                self._split_code_chunk(
+                    last_logical_index, end_line_index, line_list, last_state)
+            else:
+                self._get_code_data_chunk(
+                    line_list, last_logical_index, end_line_index)
+        else:
+            content = line_list[start_line_index][:self.max_chunk_size]
+            self._get_code_data_chunk(
+                line_list, start_line_index, last_logical_index, content)
+            cur_split = self.max_chunk_size
+            while (cur_split + self.max_chunk_size
+                   < len(line_list[start_line_index])):
+                content = line_list[start_line_index][cur_split:cur_split +
+                                                      self.max_chunk_size]
+                self._get_code_data_chunk(
+                    line_list, start_line_index, last_logical_index, content)
+                cur_split += self.max_chunk_size
+            if cur_split < len(line_list[start_line_index]):
+                print(cur_split)
+                print(len(line_list[start_line_index]))
+                content = line_list[start_line_index][cur_split:]
+                self._get_code_data_chunk(
+                    line_list, start_line_index, last_logical_index, content)
+            if (start_line_index + 1 != end_line_index):
+                if (len("".join(line_list[start_line_index+1: end_line_index])) > self.max_chunk_size):
+
+                    self._split_code_chunk(
+                        start_line_index+1, end_line_index,
+                        line_list, last_state)
+                else:
+                    self._get_code_data_chunk(
+                        line_list, start_line_index+1, end_line_index)
