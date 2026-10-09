@@ -1,12 +1,13 @@
 import fire
-from .index import IndexChunks
 from .errors import IndexingException
+from .indexing.index import index_data
 from sys import stderr
+
 
 if __name__ == "__main__":
     try:
         fire.Fire({
-            "index": IndexChunks(2000).index
+            "index": index_data()
         })
-    except IndexingException as e:
+    except (IndexingException, AssertionError, OSError, KeyboardInterrupt) as e:
         print(e, file=stderr)

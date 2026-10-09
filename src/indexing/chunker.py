@@ -1,4 +1,4 @@
-from .errors import IndexingException
+from ..errors import IndexingException
 from pydantic import BaseModel
 from pathlib import Path
 import regex as re
@@ -17,13 +17,15 @@ class DataChunk(BaseModel):
     min_source: MinimalSource
 
 
-class IndexChunks():
+class BaseChunk():
     def __init__(self, max_chunk_size: int) -> None:
         self.chunk_list: list[DataChunk] = []
         self.max_chunk_size: int = max_chunk_size
 
-        self.absolute_path: Path = Path(__file__).resolve().parent.parent
-        self.data_path: Path = Path(__file__).resolve().parent.parent / \
+        self.absolute_path: Path = Path(
+            __file__).resolve().parent.parent.parent
+        self.data_path: Path = Path(
+            __file__).resolve().parent.parent.parent / \
             "data" / "raw" / "vllm-0.10.1"
         self.test_path: Path = Path(__file__).resolve(
         ).parent.parent / "tests" / "fixtures"
@@ -37,7 +39,7 @@ class IndexChunks():
 
         self.code_chunk: bool = False
 
-    def index(self) -> None:
+    def chunk_loop(self) -> list[DataChunk]:
         if self.max_chunk_size not in range(1, 2001):
             raise IndexingException(
                 "max_chunk_size has to be in range 1-2000")
@@ -56,17 +58,14 @@ class IndexChunks():
                     self.general_index += 1
 
                 self._reset()
-        for file in self.test_path.glob("chunking_sample.py"):
+        for file in self.data_path.rglob("*.py"):
             with open(file, mode="r", encoding="utf-8") as fd:
                 chunk = fd.read()
                 self._get_code_chunk(chunk, file)
-                self.general_index += 1
                 self._reset()
 
-        for chunk in self.chunk_list:
-            pass
-            # print(chunk.index, chunk.min_source.first_character_index,
-            #     chunk.min_source.last_character_index)
+        self._test_chunks()
+        return self.chunk_list
 
     def _reset(self) -> None:
         self.end_index = 0
@@ -183,8 +182,6 @@ class IndexChunks():
             cur_chunk_size = len("".join(
                 line_list[first_line_index:last_line_index]))
             if cur_chunk_size >= self.max_chunk_size:
-                print(cur_state)
-                print(last_state)
                 self._split_code_chunk(
                     first_line_index, last_line_index,
                     line_list, last_state)
@@ -219,17 +216,8 @@ class IndexChunks():
                                    file_path=self.relative_path,
                                    first_character_index=self.start_index,
                                    last_character_index=self.end_index))
+
         self.chunk_list.append(data_chunk)
-        cur_chunk_size = len(content)
-        print(f"Chunk size: {cur_chunk_size}")
-        print(
-            f"Data chunk indexes: {data_chunk.min_source.first_character_index}, {data_chunk.min_source.last_character_index}")
-        if content.endswith("\n"):
-            print(
-                f"Data chunk content:\n{content}", end="")
-        else:
-            print(
-                f"Data chunk content:\n{content}")
         self.general_index += 1
         self.start_index = self.end_index
 
@@ -241,7 +229,6 @@ class IndexChunks():
                 line_list, start_line_index, end_line_index)
             return
         last_logical_index: int = -1
-        print(last_state)
         if last_state == ast.ClassDef:
             for index, line in enumerate(line_list[start_line_index:end_line_index]):
                 clean_line = line.lstrip(" \t").rstrip("\n")
@@ -256,8 +243,10 @@ class IndexChunks():
                 clean_line = line.lstrip(" \t").rstrip("\n")
                 if (clean_line.startswith(("for", "while", "try", "if"))
                         and clean_line.endswith(":")):
-                    last_logical_index = index + start_line_index
-                    break
+                    if (len("".join(line_list[start_line_index:index + start_line_index])) > self.max_chunk_size):
+                        break
+                    else:
+                        last_logical_index = index + start_line_index
         if last_logical_index == -1:
             for index, line in enumerate(line_list[start_line_index:end_line_index]):
                 if len("".join(line_list[start_line_index:index + start_line_index])) > self.max_chunk_size:
@@ -288,8 +277,6 @@ class IndexChunks():
                     line_list, start_line_index, last_logical_index, content)
                 cur_split += self.max_chunk_size
             if cur_split < len(line_list[start_line_index]):
-                print(cur_split)
-                print(len(line_list[start_line_index]))
                 content = line_list[start_line_index][cur_split:]
                 self._get_code_data_chunk(
                     line_list, start_line_index, last_logical_index, content)
@@ -302,3 +289,12 @@ class IndexChunks():
                 else:
                     self._get_code_data_chunk(
                         line_list, start_line_index+1, end_line_index)
+
+    def _test_chunks(self) -> None:
+        for chunk in self.chunk_list:
+            path = chunk.min_source.file_path
+            start = chunk.min_source.first_character_index
+            end = chunk.min_source.last_character_index
+            source = (self.absolute_path / path).read_text(encoding="utf_8")
+            assert 0 <= start < end <= len(source)
+            assert source[start:end] == chunk.content
