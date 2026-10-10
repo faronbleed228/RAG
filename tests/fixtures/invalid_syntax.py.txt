@@ -1,0 +1,3 @@
+# Intentionally malformed Python for error-handling tests.
+def unfinished(value: int) -> int
+    return value +

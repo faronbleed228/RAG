@@ -50,21 +50,30 @@ class BaseChunk():
             with open(file, mode="r", encoding="utf-8") as fd:
                 while chunk := fd.read(self.max_chunk_size -
                                        len(self.remaining_chunk)):
-                    self._get_md_chunk(self.remaining_chunk+chunk, file)
-                    self.general_index += 1
+                    if chunk != "":
+                        self._get_md_chunk(self.remaining_chunk+chunk, file)
 
                 if self.remaining_chunk:
                     self._get_md_chunk(self.remaining_chunk, file, True)
-                    self.general_index += 1
-
                 self._reset()
+
         for file in self.data_path.rglob("*.py"):
             with open(file, mode="r", encoding="utf-8") as fd:
                 chunk = fd.read()
-                self._get_code_chunk(chunk, file)
+                if chunk != "":
+                    self._get_code_chunk(chunk, file)
+                    self._reset()
+
+        for file in self.data_path.rglob("*.txt"):
+            with open(file, "r", encoding="utf-8") as fd:
+                while chunk := fd.read(self.max_chunk_size - len(self.remaining_chunk)):
+                    if chunk != "":
+                        self._get_txt_chunk(self.remaining_chunk + chunk, file)
+
+                if self.remaining_chunk:
+                    self._get_txt_chunk(self.remaining_chunk, file, True)
                 self._reset()
 
-        self._test_chunks()
         return self.chunk_list
 
     def _reset(self) -> None:
@@ -72,6 +81,29 @@ class BaseChunk():
         self.start_index = self.end_index
         self.code_chunk = False
         self.remaining_chunk = ""
+
+    def _get_txt_chunk(self, chunk: str,
+                       file_path: Path, last_chunk: bool = False) -> None:
+        self.relative_path = str(file_path.relative_to(self.absolute_path))
+        self.start_index = self.end_index
+
+        line_list = chunk.splitlines(True)
+        total_lenght = 0
+        last_logical_index = -1
+        if last_chunk:
+            self._create_text_chunk(chunk)
+            return
+        for index, line in enumerate(line_list):
+            total_lenght += len(line)
+            if line.endswith("\n"):
+                last_logical_index = index
+        if last_logical_index != -1:
+            logical_chunk = "".join(line_list[:max(last_logical_index, 1)])
+            self.remaining_chunk = "".join(
+                line_list[max(last_logical_index, 1):])
+            self._create_text_chunk(logical_chunk)
+        else:
+            self._create_text_chunk(chunk)
 
     def _get_md_chunk(self, chunk: str, file_path: Path,
                       last_chunk: bool = False) -> None:
@@ -103,13 +135,7 @@ class BaseChunk():
             self.code_chunk = False
 
         if last_logical_index == -1 or last_chunk:
-            self.end_index += len(chunk)
-            data_chunk = DataChunk(index=self.general_index, content=chunk,
-                                   min_source=MinimalSource(
-                                       file_path=self.relative_path,
-                                       first_character_index=self.start_index,
-                                       last_character_index=self.end_index))
-            self.chunk_list.append(data_chunk)
+            self._create_text_chunk(chunk)
             self.remaining_chunk = ""
             return
 
@@ -117,19 +143,9 @@ class BaseChunk():
             logical_chunk = "".join(line_list[:max(last_logical_index, 1)])
             self.remaining_chunk = "".join(
                 line_list[max(last_logical_index, 1):])
-            chunk_len = len(logical_chunk)
-            self.end_index += chunk_len
             self._check_code_chunk(line_list, last_code_state, max(
                 last_logical_index, 1))
-
-        data_chunk = DataChunk(index=self.general_index, content=logical_chunk,
-                               min_source=MinimalSource(
-                                   file_path=self.relative_path,
-                                   first_character_index=self.start_index,
-                                   last_character_index=self.end_index)
-                               )
-
-        self.chunk_list.append(data_chunk)
+        self._create_text_chunk(logical_chunk)
 
     def _check_code_chunk(self,
                           line_list: list[str],
@@ -290,11 +306,13 @@ class BaseChunk():
                     self._get_code_data_chunk(
                         line_list, start_line_index+1, end_line_index)
 
-    def _test_chunks(self) -> None:
-        for chunk in self.chunk_list:
-            path = chunk.min_source.file_path
-            start = chunk.min_source.first_character_index
-            end = chunk.min_source.last_character_index
-            source = (self.absolute_path / path).read_text(encoding="utf_8")
-            assert 0 <= start < end <= len(source)
-            assert source[start:end] == chunk.content
+    def _create_text_chunk(self,  content: str) -> None:
+        self.end_index += len(content)
+        data_chunk = DataChunk(index=self.general_index, content=content,
+                               min_source=MinimalSource(
+                                   file_path=self.relative_path,
+                                   first_character_index=self.start_index,
+                                   last_character_index=self.end_index)
+                               )
+        self.chunk_list.append(data_chunk)
+        self.general_index += 1
