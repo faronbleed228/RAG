@@ -1,4 +1,4 @@
-from ..errors import IndexingException
+from ..errors import ChunkingException
 from pydantic import BaseModel
 from pathlib import Path
 import regex as re
@@ -39,42 +39,63 @@ class BaseChunk():
 
         self.code_chunk: bool = False
 
+    def update_path(self, input_directory: str | None):
+        if input_directory is None:
+            return
+        try:
+            self.data_path = Path(input_directory).resolve()
+            if not self.data_path.exists():
+                raise ChunkingException(
+                    f"Input directory doesnt_exists: {input_directory}")
+        except TypeError as e:
+            raise ChunkingException(
+                "Wrong value type "
+                f"for index_directory: {type(input_directory)}") from e
+
     def chunk_loop(self) -> list[DataChunk]:
-        if self.max_chunk_size not in range(1, 2001):
-            raise IndexingException(
-                "max_chunk_size has to be in range 1-2000")
+        if self.max_chunk_size not in range(10, 2001):
+            raise ChunkingException(
+                "max_chunk_size has to be in range 10-2000")
         if not self.data_path.is_dir():
-            raise IndexingException(
+            raise ChunkingException(
                 f"Data directory does not exist: {self.data_path}")
-        for file in self.data_path.rglob("*.md"):
-            with open(file, mode="r", encoding="utf-8") as fd:
-                while chunk := fd.read(self.max_chunk_size -
-                                       len(self.remaining_chunk)):
-                    if chunk != "":
-                        self._get_md_chunk(self.remaining_chunk+chunk, file)
+        try:
+            for file in self.data_path.rglob("*.md"):
+                with open(file, mode="r", encoding="utf-8") as fd:
+                    while chunk := fd.read(self.max_chunk_size -
+                                           len(self.remaining_chunk)):
+                        if chunk != "":
+                            self._get_md_chunk(
+                                self.remaining_chunk+chunk, file)
 
-                if self.remaining_chunk:
-                    self._get_md_chunk(self.remaining_chunk, file, True)
-                self._reset()
-
-        for file in self.data_path.rglob("*.py"):
-            with open(file, mode="r", encoding="utf-8") as fd:
-                chunk = fd.read()
-                if chunk != "":
-                    self._get_code_chunk(chunk, file)
+                    if self.remaining_chunk:
+                        self._get_md_chunk(self.remaining_chunk, file, True)
                     self._reset()
 
-        for file in self.data_path.rglob("*.txt"):
-            with open(file, "r", encoding="utf-8") as fd:
-                while chunk := fd.read(self.max_chunk_size - len(self.remaining_chunk)):
+            for file in self.data_path.rglob("*.py"):
+                with open(file, mode="r", encoding="utf-8") as fd:
+                    chunk = fd.read()
                     if chunk != "":
-                        self._get_txt_chunk(self.remaining_chunk + chunk, file)
+                        self._get_code_chunk(chunk, file)
+                        self._reset()
 
-                if self.remaining_chunk:
-                    self._get_txt_chunk(self.remaining_chunk, file, True)
-                self._reset()
+            for file in self.data_path.rglob("*.txt"):
+                with open(file, "r", encoding="utf-8") as fd:
+                    while chunk := (fd.read(self.max_chunk_size
+                                            - len(self.remaining_chunk))):
+                        if chunk != "":
+                            self._get_txt_chunk(
+                                self.remaining_chunk + chunk, file)
 
-        return self.chunk_list
+                    if self.remaining_chunk:
+                        self._get_txt_chunk(self.remaining_chunk, file, True)
+                    self._reset()
+
+            return self.chunk_list
+        except UnicodeDecodeError as e:
+            raise ChunkingException(f"Unicode Error for file: {file},"
+                                    f" encoding:{e.encoding}, "
+                                    f"reason:{e.reason}") from e
 
     def _reset(self) -> None:
         self.end_index = 0
@@ -161,9 +182,16 @@ class BaseChunk():
         self.code_chunk = start_state
 
     def _get_code_chunk(self, chunk: str, file_path: Path) -> None:
-        self.relative_path: str = str(
+        self.relative_path = str(
             file_path.relative_to(self.absolute_path))
-        tree = ast.parse(chunk)
+
+        try:
+            tree = ast.parse(chunk)
+        except SyntaxError as e:
+            raise ChunkingException(
+                f"Syntax error in {self.relative_path}, "
+                "line:{e.lineno}, msg: {e.msg}") from e
+
         line_list = chunk.splitlines(keepends=True)
 
         last_state: type | None = None
@@ -220,7 +248,8 @@ class BaseChunk():
 
     def _get_code_data_chunk(self, line_list: list[str],
                              first_line_index: int,
-                             last_line_index: int, content: str | None = None) -> None:
+                             last_line_index: int,
+                             content: str | None = None) -> None:
         if content is None:
             content = "".join(
                 line_list[first_line_index:last_line_index])
@@ -240,32 +269,43 @@ class BaseChunk():
     def _split_code_chunk(self, start_line_index: int, end_line_index: int,
                           line_list: list[str],
                           last_state: type | None) -> None:
-        if len("".join(line_list[start_line_index:end_line_index])) <= self.max_chunk_size:
+        if (len("".join(line_list[start_line_index:end_line_index]))
+                <= self.max_chunk_size):
             self._get_code_data_chunk(
                 line_list, start_line_index, end_line_index)
             return
         last_logical_index: int = -1
         if last_state == ast.ClassDef:
-            for index, line in enumerate(line_list[start_line_index:end_line_index]):
+            for index, line in enumerate(
+                    line_list[start_line_index:end_line_index]):
                 clean_line = line.lstrip(" \t").rstrip("\n")
                 if clean_line.startswith(("def ")):
-                    if len("".join(line_list[start_line_index:index + start_line_index])) > self.max_chunk_size:
+                    if (len("".join(
+                        line_list[start_line_index:index + start_line_index]))
+                            > self.max_chunk_size):
                         break
                     else:
                         last_logical_index = index + start_line_index
 
         elif last_state in (ast.FunctionDef, ast.AsyncFunctionDef):
-            for index, line in enumerate(line_list[start_line_index:end_line_index]):
+            for index, line in enumerate(
+                    line_list[start_line_index:end_line_index]):
                 clean_line = line.lstrip(" \t").rstrip("\n")
                 if (clean_line.startswith(("for", "while", "try", "if"))
                         and clean_line.endswith(":")):
-                    if (len("".join(line_list[start_line_index:index + start_line_index])) > self.max_chunk_size):
+                    if (len
+                        ("".join(line_list
+                                 [start_line_index:index + start_line_index]))
+                            > self.max_chunk_size):
                         break
                     else:
                         last_logical_index = index + start_line_index
         if last_logical_index == -1:
-            for index, line in enumerate(line_list[start_line_index:end_line_index]):
-                if len("".join(line_list[start_line_index:index + start_line_index])) > self.max_chunk_size:
+            for index, line in enumerate(
+                    line_list[start_line_index:end_line_index]):
+                if (len("".join(
+                    line_list[start_line_index:index + start_line_index]))
+                        > self.max_chunk_size):
                     break
                 else:
                     last_logical_index = index + start_line_index
@@ -274,7 +314,8 @@ class BaseChunk():
             self._get_code_data_chunk(
                 line_list, start_line_index, last_logical_index)
 
-            if len("".join(line_list[last_logical_index:end_line_index])) > self.max_chunk_size:
+            if (len("".join(line_list[last_logical_index:end_line_index]))
+                    > self.max_chunk_size):
                 self._split_code_chunk(
                     last_logical_index, end_line_index, line_list, last_state)
             else:
@@ -297,7 +338,8 @@ class BaseChunk():
                 self._get_code_data_chunk(
                     line_list, start_line_index, last_logical_index, content)
             if (start_line_index + 1 != end_line_index):
-                if (len("".join(line_list[start_line_index+1: end_line_index])) > self.max_chunk_size):
+                if (len("".join(line_list[start_line_index+1: end_line_index]))
+                        > self.max_chunk_size):
 
                     self._split_code_chunk(
                         start_line_index+1, end_line_index,
