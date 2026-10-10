@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from pathlib import Path
 import regex as re
 import ast
+from tqdm import tqdm
 
 
 class MinimalSource(BaseModel):
@@ -60,7 +61,12 @@ class BaseChunk():
             raise ChunkingException(
                 f"Data directory does not exist: {self.data_path}")
         try:
-            for file in self.data_path.rglob("*.md"):
+            md_files: list[Path] = [
+                file for file in
+                self.data_path.rglob("*.md") if file.is_file()]
+
+            for file in tqdm(md_files, desc="Chunking MD Files",
+                             total=len(md_files)):
                 with open(file, mode="r", encoding="utf-8") as fd:
                     while chunk := fd.read(self.max_chunk_size -
                                            len(self.remaining_chunk)):
@@ -72,14 +78,23 @@ class BaseChunk():
                         self._get_md_chunk(self.remaining_chunk, file, True)
                     self._reset()
 
-            for file in self.data_path.rglob("*.py"):
+            code_files: list[Path] = [
+                file for file in self.data_path.rglob("*.py") if file.is_file()]
+
+            for file in tqdm(code_files, desc="Chunking Python Files",
+                             total=len(code_files)):
                 with open(file, mode="r", encoding="utf-8") as fd:
                     chunk = fd.read()
                     if chunk != "":
                         self._get_code_chunk(chunk, file)
                         self._reset()
 
-            for file in self.data_path.rglob("*.txt"):
+            txt_files: list[Path] = [
+                file for file in
+                self.data_path.rglob("*.txt") if file.is_file()]
+
+            for file in tqdm(txt_files, desc="Chunking Txt Files",
+                             total=len(txt_files)):
                 with open(file, "r", encoding="utf-8") as fd:
                     while chunk := (fd.read(self.max_chunk_size
                                             - len(self.remaining_chunk))):
@@ -125,6 +140,7 @@ class BaseChunk():
             self._create_text_chunk(logical_chunk)
         else:
             self._create_text_chunk(chunk)
+            self.remaining_chunk = ""
 
     def _get_md_chunk(self, chunk: str, file_path: Path,
                       last_chunk: bool = False) -> None:

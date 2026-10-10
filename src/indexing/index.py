@@ -2,7 +2,9 @@ from .chunker import BaseChunk, DataChunk
 from pathlib import Path
 from ..errors import IndexingException
 import bm25s
-from pydantic import TypeAdapter
+from tqdm import tqdm
+from typing import Any, List
+from pathlib import Path
 
 
 def index_data(max_chunk_size: int = 2000,
@@ -12,23 +14,26 @@ def index_data(max_chunk_size: int = 2000,
     chunker = BaseChunk(max_chunk_size)
     chunker.update_path(input_directory)
     chunk_list: list[DataChunk] = chunker.chunk_loop()
+    absolute_path = chunker.absolute_path
 
-    # print_chunks_info(chunk_list)
-    load_chunks(chunk_list)
-    create_search_index(chunk_list, index_directory)
-
-
-def print_chunks_info(chunk_list: list[DataChunk]) -> None:
-    for chunk in chunk_list:
-        print("Chunk index", chunk.index)
-        print("Chunk first char", chunk.min_source.first_character_index)
-        print("Chunk last char", chunk.min_source.last_character_index)
-        print()
+    load_chunks(chunk_list, index_directory)
+    create_search_index(chunk_list,
+                        index_directory, absolute_path)
 
 
-def load_chunks(chunk_list: list[DataChunk]) -> None:
-    data_path = Path(__file__).resolve(
-    ).parent.parent.parent / "data" / "processed" / "chunks.jsonl"
+def load_chunks(chunk_list: list[DataChunk],
+                chunks_directory: str | None) -> None:
+    try:
+        if chunks_directory is None:
+            data_path = Path(__file__).resolve(
+            ).parent.parent.parent / "data" / "processed" / "chunks.jsonl"
+        else:
+            data_path = Path(chunks_directory, "chunks_jsonl").resolve()
+    except TypeError as e:
+        raise IndexingException(
+            "Wrong value type "
+            f"for chunks_directory: {type(chunks_directory)}") from e
+
     data_path.parent.mkdir(parents=True, exist_ok=True)
     with data_path.open("w", encoding="utf-8") as output:
         for chunk in chunk_list:
@@ -42,13 +47,14 @@ def load_chunks(chunk_list: list[DataChunk]) -> None:
 
 
 def create_search_index(chunk_list: list[DataChunk],
-                        index_directory: str | None) -> None:
+                        index_directory: str | None,
+                        absolute_path: Path) -> None:
     try:
         if index_directory is None:
             data_path = Path(__file__).resolve(
             ).parent.parent.parent / "data" / "processed" / "bm25"
         else:
-            data_path = Path(index_directory).resolve()
+            data_path = Path(index_directory, "bm25").resolve()
     except TypeError as e:
         raise IndexingException(
             "Wrong value type "
@@ -59,7 +65,11 @@ def create_search_index(chunk_list: list[DataChunk],
     texts: list[str] = [chunk.content for chunk in chunk_list]
     if len(texts) == 0:
         raise IndexingException("All data files are empty")
-    corpus_tokens = bm25s.tokenize(texts, stopwords=[], return_ids=False)
+    corpus_tokens = bm25s.tokenize(
+        texts, stopwords=[], return_ids=False, show_progress=True)
+    print(
+        f"Ingestion complete! Indexed {len(corpus_tokens)} "
+        f"under {data_path.relative_to(absolute_path)}")
     retriever = bm25s.BM25()
     retriever.index(corpus_tokens)
     retriever.save(data_path)

@@ -517,6 +517,7 @@ dependencies = [
     { name = "pystemmer" },
     { name = "pytest" },
     { name = "regex" },
+    { name = "tqdm" },
 ]
 
 [package.metadata]
@@ -528,6 +529,7 @@ requires-dist = [
     { name = "pystemmer", specifier = ">=3.1.0" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "regex", specifier = ">=2026.9.29" },
+    { name = "tqdm", specifier = ">=4.70.1" },
 ]
 
 [[package]]
