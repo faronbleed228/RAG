@@ -1,18 +1,21 @@
 import fire
-from .errors import IndexingException, ChunkingException
-from .indexing.index import index_data
 from sys import stderr, exit
 from pydantic import ValidationError
-import pathlib
+from .indexing.index import index_data
+from .errors import IndexingException, ChunkingException, SearchException
+from .search.search import search
 
 
 if __name__ == "__main__":
     try:
         fire.Fire({
-            "index": index_data
+            "index": index_data,
+            "search": search
+
         })
     except (IndexingException, AssertionError,
-            OSError, ValidationError, ChunkingException) as e:
+            OSError, ValidationError, ChunkingException,
+            SearchException) as e:
         print(e, file=stderr)
         exit(1)
     except KeyboardInterrupt:

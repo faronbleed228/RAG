@@ -66,7 +66,7 @@ def create_search_index(chunk_list: list[DataChunk],
     if len(texts) == 0:
         raise IndexingException("All data files are empty")
     corpus_tokens = bm25s.tokenize(
-        texts, stopwords=[], return_ids=False, show_progress=True)
+        texts, stopwords=[], return_ids=False, show_progress=True, leave=True)
     print(
         f"Ingestion complete! Indexed {len(corpus_tokens)} "
         f"under {data_path.relative_to(absolute_path)}")

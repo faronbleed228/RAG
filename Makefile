@@ -1,8 +1,9 @@
 UV ?= uv
 ARGS ?= --help
+TEST_ARGS ?=
 
 .DEFAULT_GOAL := run
-.PHONY: install run debug clean lint
+.PHONY: install run debug clean lint test
 
 install:
 	$(UV) sync
@@ -12,6 +13,9 @@ run:
 
 debug:
 	$(UV) run python -m pdb -m src $(ARGS)
+
+test:
+	$(UV) run python -m pytest tests $(TEST_ARGS)
 
 clean:
 	find . -type d \( -name .git -o -name .venv -o -name data \) -prune -o \
