@@ -13,4 +13,5 @@ dependencies = [
     "pytest>=9.1.1",
     "regex>=2026.9.29",
     "tqdm>=4.70.1",
+    "uuid>=1.30",
 ]

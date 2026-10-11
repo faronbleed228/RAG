@@ -2,8 +2,6 @@ from .chunker import BaseChunk, DataChunk
 from pathlib import Path
 from ..errors import IndexingException
 import bm25s
-from tqdm import tqdm
-from typing import Any, List
 from pathlib import Path
 
 
@@ -23,16 +21,20 @@ def index_data(max_chunk_size: int = 2000,
 
 def load_chunks(chunk_list: list[DataChunk],
                 chunks_directory: str | None) -> None:
+    if len(chunk_list) == 0:
+        raise IndexingException("Chunk list is empty....")
     try:
         if chunks_directory is None:
             data_path = Path(__file__).resolve(
             ).parent.parent.parent / "data" / "processed" / "chunks.jsonl"
         else:
-            data_path = Path(chunks_directory, "chunks_jsonl").resolve()
-    except TypeError as e:
+            if chunks_directory.strip() == "":
+                raise IndexingException("Chunks path has to be not empty")
+            data_path = Path(chunks_directory, "chunks.jsonl").resolve()
+    except (TypeError, AttributeError) as e:
         raise IndexingException(
             "Wrong value type "
-            f"for chunks_directory: {type(chunks_directory)}") from e
+            f"for chunks directory: {type(chunks_directory)}") from e
 
     data_path.parent.mkdir(parents=True, exist_ok=True)
     with data_path.open("w", encoding="utf-8") as output:
@@ -54,11 +56,13 @@ def create_search_index(chunk_list: list[DataChunk],
             data_path = Path(__file__).resolve(
             ).parent.parent.parent / "data" / "processed" / "bm25"
         else:
+            if index_directory.strip() == "":
+                raise IndexingException("Index path has to be not empty")
             data_path = Path(index_directory, "bm25").resolve()
-    except TypeError as e:
+    except (TypeError, AttributeError) as e:
         raise IndexingException(
             "Wrong value type "
-            f"for index_directory: {type(index_directory)}") from e
+            f"for index directory: {type(index_directory)}") from e
 
     data_path.mkdir(parents=True, exist_ok=True)
 
@@ -69,7 +73,7 @@ def create_search_index(chunk_list: list[DataChunk],
         texts, stopwords=[], return_ids=False, show_progress=True, leave=True)
     print(
         f"Ingestion complete! Indexed {len(corpus_tokens)} "
-        f"under {data_path.relative_to(absolute_path)}")
+        f"under {data_path}")
     retriever = bm25s.BM25()
     retriever.index(corpus_tokens)
     retriever.save(data_path)

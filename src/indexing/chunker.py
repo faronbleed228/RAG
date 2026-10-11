@@ -44,14 +44,21 @@ class BaseChunk():
         if input_directory is None:
             return
         try:
+            if input_directory.strip() == "":
+                raise ChunkingException("Input path has to be not empty")
             self.data_path = Path(input_directory).resolve()
+            self.data_path.relative_to(self.absolute_path)
             if not self.data_path.exists():
                 raise ChunkingException(
                     f"Input directory doesnt_exists: {input_directory}")
-        except TypeError as e:
+        except (TypeError, AttributeError) as e:
             raise ChunkingException(
                 "Wrong value type "
-                f"for index_directory: {type(input_directory)}") from e
+                f"for raw_data: {type(input_directory)}") from e
+        except ValueError as e:
+            raise ChunkingException(
+                "Raw data cant be located outside of program folder"
+            ) from e
 
     def chunk_loop(self) -> list[DataChunk]:
         if self.max_chunk_size not in range(10, 2001):
