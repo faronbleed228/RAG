@@ -1,21 +1,9 @@
 from ..errors import ChunkingException
-from pydantic import BaseModel
 from pathlib import Path
 import regex as re
 import ast
 from tqdm import tqdm
-
-
-class MinimalSource(BaseModel):
-    file_path: str
-    first_character_index: int
-    last_character_index: int
-
-
-class DataChunk(BaseModel):
-    index: int
-    content: str
-    min_source: MinimalSource
+from ..dataset_classes import MinimalSource, DataChunk
 
 
 class BaseChunk():
@@ -86,7 +74,8 @@ class BaseChunk():
                     self._reset()
 
             code_files: list[Path] = [
-                file for file in self.data_path.rglob("*.py") if file.is_file()]
+                file for file in
+                self.data_path.rglob("*.py") if file.is_file()]
 
             for file in tqdm(code_files, desc="Chunking Python Files",
                              total=len(code_files)):

@@ -1,37 +1,11 @@
 from .search import search
 from ..indexing.chunker import MinimalSource, DataChunk
 from ..errors import SearchException
-from pydantic import BaseModel, Field
+from ..dataset_classes import (RagDataset, MinimalSearchResults,
+                               StudentSearchResults, UnansweredQuestion)
 
-import uuid
 from pathlib import Path
 from typing import Any
-
-
-class UnansweredQuestion(BaseModel):
-    question_id: str = Field(default_factory=lambda:
-                             str(uuid.uuid4()))
-    question: str
-
-
-class AnsweredQuestion(UnansweredQuestion):
-    sources: list[MinimalSource]
-    answer: str
-
-
-class RagDataset(BaseModel):
-    rag_questions: list[AnsweredQuestion | UnansweredQuestion]
-
-
-class MinimalSearchResults(BaseModel):
-    question_id: str
-    question: str
-    retrieved_sources: list[MinimalSource]
-
-
-class StudentSearchResults(BaseModel):
-    search_results: list[MinimalSearchResults]
-    k: int
 
 
 def search_dataset(dataset_path: str | None = None,
@@ -55,7 +29,7 @@ def _dump_results(save_dir: Path,
 
 
 def _collect_results(rag_dataset: RagDataset, k: int,
-                     index_directory: str | None) -> list[MinimalSearchResults]:
+                     index_dir: str | None) -> list[MinimalSearchResults]:
     question_list: list[UnansweredQuestion] = []
     for question in rag_dataset.rag_questions:
         if not isinstance(question, UnansweredQuestion):
@@ -67,7 +41,7 @@ def _collect_results(rag_dataset: RagDataset, k: int,
     q_list = [q.question for q in question_list]
     if len(q_list) == 0:
         raise SearchException("Empty query dataset")
-    chunk_list, documents = search(q_list, k, index_directory)
+    chunk_list, documents = search(q_list, k, index_dir)
     results = _create_result(question_list, documents, chunk_list)
 
     return (results)

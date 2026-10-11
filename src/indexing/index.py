@@ -2,7 +2,6 @@ from .chunker import BaseChunk, DataChunk
 from pathlib import Path
 from ..errors import IndexingException
 import bm25s
-from pathlib import Path
 
 
 def index_data(max_chunk_size: int = 2000,
@@ -12,11 +11,10 @@ def index_data(max_chunk_size: int = 2000,
     chunker = BaseChunk(max_chunk_size)
     chunker.update_path(input_directory)
     chunk_list: list[DataChunk] = chunker.chunk_loop()
-    absolute_path = chunker.absolute_path
 
     load_chunks(chunk_list, index_directory)
     create_search_index(chunk_list,
-                        index_directory, absolute_path)
+                        index_directory)
 
 
 def load_chunks(chunk_list: list[DataChunk],
@@ -49,8 +47,7 @@ def load_chunks(chunk_list: list[DataChunk],
 
 
 def create_search_index(chunk_list: list[DataChunk],
-                        index_directory: str | None,
-                        absolute_path: Path) -> None:
+                        index_directory: str | None) -> None:
     try:
         if index_directory is None:
             data_path = Path(__file__).resolve(
