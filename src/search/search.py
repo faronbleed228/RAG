@@ -31,7 +31,7 @@ def search(query: str | list[str], k: int,
         ) from e
     try:
         query_tokens = bm25s.tokenize(
-            query, stopwords=[], leave=False, return_ids=False)
+            query, stopwords="english", leave=False, return_ids=False)
         documents, scores = retriever.retrieve(
             query_tokens, k=k, leave_progress=False)
     except (TypeError, AttributeError) as e:

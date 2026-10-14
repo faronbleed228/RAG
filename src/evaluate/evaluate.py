@@ -11,6 +11,7 @@ def evaluate(student_search_results_path: str | None = None,
         student_search_results_path, dataset_path)
     search_dataset = _get_search_dataset(results_path)
     rag_dataset = _get_answered(data_path)
+    _recall_5(search_dataset, rag_dataset)
 
 
 def _get_search_dataset(result_path: Path) -> StudentSearchResults:
@@ -30,27 +31,58 @@ def _get_answered(answers_path: Path) -> RagDataset:
     return rag_dataset
 
 
-def _recall(search_dataset: StudentSearchResults,
-            rag_dataset: RagDataset) -> None:
-    for answer in rag_dataset.rag_questions:
+def _recall_5(search_dataset: StudentSearchResults,
+              rag_dataset: RagDataset) -> None:
+    if len(search_dataset.search_results) != len(rag_dataset.rag_questions):
+        raise SearchException(
+            "Amount of questions has to be equal "
+            "in student_search_results and dataset")
+    total_recall: float = 0
+
+    for answer, search_results in zip(rag_dataset.rag_questions,
+                                      search_dataset.search_results):
         if not isinstance(answer, AnsweredQuestion):
             raise SearchException("Wrong data format in Answered Question")
-        sources = answer.sources
+        if len(answer.sources) == 0:
+            raise SearchException("Data must have at least one source")
+        if answer.question_id != search_results.question_id:
+            raise SearchException(
+                "Questio Ids are not matching check your data")
+
+        matches = 0
+        for ideal_source in answer.sources:
+
+            if _get_iou(ideal_source, search_results.retrieved_sources):
+                matches += 1
+        total_recall += matches / len(answer.sources)
+
+    recall = total_recall / len(rag_dataset.rag_questions)
+    print(recall)
 
 
 def _get_iou(ideal_source: MinimalSource,
-             retrieved_source: MinimalSource) -> float:
-    if ideal_source.file_path != retrieved_source.file_path:
-        return 0
-    ideal_start = ideal_source.first_character_index
-    ideal_end = ideal_source.last_character_index
-    sys_start = retrieved_source.first_character_index
-    sys_end = retrieved_source.last_character_index
-    intersection = max(0, min(ideal_end, sys_end)
-                       - max(ideal_start, sys_start))
-    union = ((ideal_end - ideal_start) + (sys_end - sys_start) - intersection)
-    iou = intersection / union
-    return iou
+             retrieved_sources: list[MinimalSource]) -> bool:
+    for retrieved_source in retrieved_sources[:5]:
+        if retrieved_source.file_path != ideal_source.file_path:
+            continue
+        else:
+            ideal_start = ideal_source.first_character_index
+            ideal_end = ideal_source.last_character_index
+            sys_start = retrieved_source.first_character_index
+            sys_end = retrieved_source.last_character_index
+            if (not (0 <= ideal_start < ideal_end)
+                    or not (0 <= sys_start < sys_end)):
+                raise SearchException(
+                    "Incorrect start/end boundaries check your data")
+            intersection = max(0, min(ideal_end, sys_end)
+                               - max(ideal_start, sys_start))
+            union = ((ideal_end - ideal_start) +
+                     (sys_end - sys_start) - intersection)
+            iou = intersection / union
+            if iou >= 0.05:
+
+                return True
+    return False
 
 
 def _validate_input(student_search_results_path: str | None,
@@ -58,8 +90,8 @@ def _validate_input(student_search_results_path: str | None,
     try:
         if student_search_results_path is None:
             results_path = Path(__file__).resolve(
-            ).parent.parent.parent / "data" / "output" / "search_result" \
-                / "dataset_docs_public.json"
+            ).parent.parent.parent / "data" / "output" / "search_results" \
+                / "UnansweredQuestions" / "dataset_docs_public.json"
         else:
             if student_search_results_path.strip() == "":
                 raise SearchException(
@@ -78,7 +110,7 @@ def _validate_input(student_search_results_path: str | None,
     try:
         if dataset_path is None:
             data_path = Path(__file__).resolve(
-            ).parent.parent.parent / "data" / "output" / "search_result" \
+            ).parent.parent.parent / "data" / "datasets" / "AnsweredQuestions" \
                 / "dataset_docs_public.json"
         else:
             if dataset_path.strip() == "":
