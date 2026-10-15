@@ -6,6 +6,7 @@ from .errors import IndexingException, ChunkingException, SearchException
 from .search.search import search_cli
 from .search.search_dataset import search_dataset
 from .evaluate.evaluate import evaluate
+from .answer.answer import answer
 
 if __name__ == "__main__":
     try:
@@ -13,7 +14,8 @@ if __name__ == "__main__":
             "index": index_data,
             "search": search_cli,
             "search_dataset": search_dataset,
-            "evaluate": evaluate
+            "evaluate": evaluate,
+            "answer": answer
 
         })
     except KeyboardInterrupt:

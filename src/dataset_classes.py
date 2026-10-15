@@ -38,3 +38,12 @@ class MinimalSearchResults(BaseModel):
 class StudentSearchResults(BaseModel):
     search_results: list[MinimalSearchResults]
     k: int
+
+
+class MinimalAnswer(MinimalSearchResults):
+    answer: str
+
+
+class StudentSearchResultsAndAnswer(BaseModel):
+    search_results: list[MinimalAnswer]
+    k: int

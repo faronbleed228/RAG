@@ -2,6 +2,7 @@ import bm25s
 from pathlib import Path
 from ..errors import SearchException
 from ..indexing.chunker import DataChunk
+from ..indexing.index import get_more_token
 from typing import Any
 
 
@@ -30,8 +31,13 @@ def search(query: str | list[str], k: int,
             "Check files and try again"
         ) from e
     try:
+        if isinstance(query, list):
+            query_list = [get_more_token(q) for q in query]
+        else:
+            query_list = get_more_token(query)
         query_tokens = bm25s.tokenize(
-            query, stopwords="english", leave=False, return_ids=False)
+            query_list, stopwords="english",
+            leave=False, return_ids=False, lower=True)
         documents, scores = retriever.retrieve(
             query_tokens, k=k, leave_progress=False)
     except (TypeError, AttributeError) as e:

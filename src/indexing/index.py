@@ -63,14 +63,39 @@ def create_search_index(chunk_list: list[DataChunk],
 
     data_path.mkdir(parents=True, exist_ok=True)
 
-    texts: list[str] = [chunk.content for chunk in chunk_list]
+    texts: list[str] = [get_more_token(chunk.content) for chunk in chunk_list]
     if len(texts) == 0:
         raise IndexingException("All data files are empty")
     corpus_tokens = bm25s.tokenize(
-        texts, stopwords=["what", "which", "who", "does", "do", "did"], return_ids=False, show_progress=True, leave=True)
+        texts, stopwords=["what", "which", "who", "does", "do", "did"], return_ids=False, show_progress=True, leave=True, lower=True)
     print(
         f"Ingestion complete! Indexed {len(corpus_tokens)} "
         f"under {data_path}")
     retriever = bm25s.BM25()
     retriever.index(corpus_tokens)
     retriever.save(data_path)
+
+
+def get_more_token(content: str) -> str:
+    words: list[str] = content.split()
+    total_words: list[str] = content.split()
+    for word in words:
+        if len(word.strip("_").split("_")) > 1:
+            total_words.extend(word.split("_"))
+        camelcase: list[str] = []
+        last_index = 0
+        for index in range(len(word)):
+            if (index != 0
+                    and (word[index].isupper() and word[index-1].islower())):
+                camelcase.append(word[last_index:index])
+                last_index = index
+            if (index != 0 and index != len(word) - 1
+                    and (word[index].isupper() and word[index-1].isupper()) and word[index+1].islower()):
+                camelcase.append(word[last_index:index])
+                last_index = index
+        if len(camelcase) != 0:
+            camelcase.append(word[last_index:])
+            total_words.extend(camelcase)
+            camelcase = []
+
+    return " ".join(total_words)
