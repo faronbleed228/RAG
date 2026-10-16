@@ -1,5 +1,4 @@
-from ..dataset_classes import (AnsweredQuestion, MinimalAnswer,
-                               StudentSearchResultsAndAnswer, DataChunk, MinimalSource)
+from ..dataset_classes import (MinimalAnswer, DataChunk)
 from ..search.search import search
 import torch
 from transformers.models.auto.tokenization_auto import AutoTokenizer
@@ -36,12 +35,6 @@ def answer(query: str, k: int = 10, index_dir: str | None = None) -> None:
     output_ids = output_ids[0][input_len:]
     output = tokeniser.decode(output_ids, skip_special_tokens=True)
     print(output)
-
-
-def build_min_answer(answer: str, query) -> MinimalAnswer
-
-
-answer = MinimalAnswer()
 
 
 def _build_promt(query: str, chunk_list: list[DataChunk]) -> str:

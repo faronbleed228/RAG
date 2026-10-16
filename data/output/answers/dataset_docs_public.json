@@ -1,0 +1,71 @@
+{
+  "search_results": [
+    {
+      "question_id": "17526382-7764-4120-b5e8-2d3726b8a4da",
+      "question": "What HTTP endpoint is used to dynamically load a LoRA adapter in vLLM?",
+      "retrieved_sources": [
+        {
+          "file_path": "data/raw/vllm-0.10.1/docs/features/lora.md",
+          "first_character_index": 3834,
+          "last_character_index": 5715
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/docs/features/lora.md",
+          "first_character_index": 5715,
+          "last_character_index": 7657
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/examples/others/tensorize_vllm_model.py",
+          "first_character_index": 2618,
+          "last_character_index": 4459
+        }
+      ],
+      "answer": "The HTTP endpoint used to dynamically load a LoRA adapter is `/v1/load_lora_adapter`."
+    },
+    {
+      "question_id": "cc83c230-099f-4c11-aeab-8c09715c5942",
+      "question": "What command can be used to evaluate the accuracy of a quantized model using lm_eval with vLLM?",
+      "retrieved_sources": [
+        {
+          "file_path": "data/raw/vllm-0.10.1/docs/features/quantization/fp8.md",
+          "first_character_index": 1834,
+          "last_character_index": 3791
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/tests/tpu/test_quantization_accuracy.py",
+          "first_character_index": 1048,
+          "last_character_index": 1603
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/docs/features/quantization/quark.md",
+          "first_character_index": 7115,
+          "last_character_index": 8969
+        }
+      ],
+      "answer": "The command to evaluate the accuracy of a quantized model using `lm_eval` with vLLM is `lm_eval --model vllm`."
+    },
+    {
+      "question_id": "5ea5c01a-c953-4477-ae3a-978e20bd73b8",
+      "question": "What method does vLLM's LLM class provide for generating embedding vectors from prompts?",
+      "retrieved_sources": [
+        {
+          "file_path": "data/raw/vllm-0.10.1/docs/getting_started/quickstart.md",
+          "first_character_index": 1991,
+          "last_character_index": 3865
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/vllm/entrypoints/llm.py",
+          "first_character_index": 51641,
+          "last_character_index": 53620
+        },
+        {
+          "file_path": "data/raw/vllm-0.10.1/examples/offline_inference/prefix_caching.py",
+          "first_character_index": 1296,
+          "last_character_index": 2811
+        }
+      ],
+      "answer": "The LLM class provides the method for generating embedding vectors from prompts, which is described in [1]."
+    }
+  ],
+  "k": 3
+}

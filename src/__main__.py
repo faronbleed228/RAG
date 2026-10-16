@@ -7,6 +7,7 @@ from .search.search import search_cli
 from .search.search_dataset import search_dataset
 from .evaluate.evaluate import evaluate
 from .answer.answer import answer
+from .answer.answer_dataset import answer_dataset
 
 if __name__ == "__main__":
     try:
@@ -15,7 +16,8 @@ if __name__ == "__main__":
             "search": search_cli,
             "search_dataset": search_dataset,
             "evaluate": evaluate,
-            "answer": answer
+            "answer": answer,
+            "answer_dataset": answer_dataset
 
         })
     except KeyboardInterrupt:
