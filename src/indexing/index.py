@@ -130,8 +130,9 @@ def create_search_index(chunk_list: list[DataChunk],
         raise IndexingException(
             "Wrong value type "
             f"for index directory: {type(index_directory)}") from e
-
-    texts: list[str] = [get_more_token(chunk.content, chunk.min_source.file_path) for chunk in chunk_list]
+    texts: list[str] = [get_more_token(chunk.content,
+                        chunk.min_source.file_path)
+                        for chunk in chunk_list]
     if len(texts) == 0:
         raise IndexingException("All data files are empty")
     corpus_tokens = bm25s.tokenize(
@@ -150,11 +151,13 @@ def create_search_index(chunk_list: list[DataChunk],
     retriever.save(data_path)
 
 
-def get_more_token(content: str, path:str| None = None) -> str:
+def get_more_token(content: str, path: str | None = None) -> str:
     """Keep original words and append their snake_case and CamelCase parts."""
     words: list[str] = content.split()
     if path is not None:
-        words.insert(0, path)
+        path_list = path.split("/")
+        file_path = "/".join(path_list[2:])
+        words.insert(0, file_path)
     total_words: list[str] = words.copy()
     for word in words:
         if len(word.strip("_").split("_")) > 1:
