@@ -52,7 +52,7 @@ def test_index_then_search(corpus_dir: Path, tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("query,k", [
-    ("", "1"), ("   ", "1"), ("purring", "0"),
+    ("", "1"), ("   ", "1"), ("[]", "1"), ("purring", "0"),
     ("purring", "100"), ("purring", "abc"),
 ])
 def test_invalid_search_has_no_traceback(
@@ -138,3 +138,32 @@ def test_blank_index_input_has_no_traceback(path: str) -> None:
     result = run_cli("index", "--input_directory", path)
     assert result.returncode != 0
     assert "Traceback" not in result.stderr, result.stderr
+
+
+@pytest.mark.parametrize("path", ["", "   "])
+def test_blank_search_index_has_no_traceback(path: str) -> None:
+    """Explain a blank index path without leaking a Python exception."""
+    result = run_cli("search", "purring", "--k", "1", "--index_dir", path)
+    assert result.returncode != 0
+    assert "empty" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_dataset_output_is_utf8_in_ascii_locale(
+    dataset_path: Path, indexed_dir: Path, tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Save non-ASCII questions regardless of the process locale."""
+    monkeypatch.setenv("LC_ALL", "C")
+    monkeypatch.setenv("PYTHONUTF8", "0")
+    monkeypatch.setenv("PYTHONCOERCECLOCALE", "0")
+    output = tmp_path / "results"
+    result = run_cli(
+        "search_dataset", "--dataset_path", str(dataset_path), "--k", "1",
+        "--save_directory", str(output),
+        "--index_directory", str(indexed_dir),
+    )
+    assert result.returncode == 0, result.stderr
+    saved = StudentSearchResults.model_validate_json(
+        (output / dataset_path.name).read_text(encoding="utf-8"))
+    assert saved.search_results[1].question == "Where is purring? 🐈"

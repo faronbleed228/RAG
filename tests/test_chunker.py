@@ -111,6 +111,8 @@ def test_invalid_python(tmp_path: Path) -> None:
     with pytest.raises(ChunkingException, match="broken.py") as error:
         chunker.chunk_loop()
     assert isinstance(error.value.__cause__, SyntaxError)
+    assert "line:1" in str(error.value)
+    assert "invalid syntax" in str(error.value)
 
 
 @pytest.mark.parametrize("suffix", [".py", ".md", ".txt"])
@@ -138,3 +140,22 @@ def test_small_decorated_function_stays_together(tmp_path: Path) -> None:
     chunks = chunker.chunk_loop()
     decorated = source[source.index("@cache"):]
     assert any(decorated in chunk.content for chunk in chunks)
+
+
+@pytest.mark.parametrize("limit", [10, 2000])
+def test_large_function_splits_without_recursion(
+    tmp_path: Path, limit: int,
+) -> None:
+    """Split thousands of source fragments while preserving every character."""
+    source = "def large():\n" + "    value = 1\n" * 1400
+    (tmp_path / "large.py").write_text(source, encoding="utf-8")
+    chunker = BaseChunk(limit)
+    chunker.absolute_path = tmp_path
+    chunker.data_path = tmp_path
+    chunks = chunker.chunk_loop()
+    assert "".join(chunk.content for chunk in chunks) == source
+    for chunk in chunks:
+        start = chunk.min_source.first_character_index
+        end = chunk.min_source.last_character_index
+        assert 0 < end - start <= limit
+        assert source[start:end] == chunk.content

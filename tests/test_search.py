@@ -1,6 +1,7 @@
 """Exercise ranking, source ranges, and invalid search inputs."""
 
 from pathlib import Path
+import json
 import re
 from typing import Any
 
@@ -37,7 +38,7 @@ def test_search_returns_ranked_source_spans(
 
 
 @pytest.mark.parametrize("query", [
-    "", " \t\n", None, 123, {}, ["purring", ""], ["purring", 123],
+    "", " \t\n", None, 123, {}, [], ["purring", ""], ["purring", 123],
 ])
 def test_invalid_query(indexed_dir: Path, query: Any) -> None:
     """Reject blank text and non-string query values."""
@@ -139,3 +140,27 @@ def test_batch_matches_individual_searches(indexed_dir: Path) -> None:
         batch_source = chunks[int(row[0])].min_source
         single_source = single_chunks[int(single_documents[0, 0])].min_source
         assert batch_source == single_source
+
+
+@pytest.mark.parametrize("change", ["truncate", "reverse"])
+def test_mismatched_chunks_are_rejected(
+    indexed_dir: Path, change: str,
+) -> None:
+    """Reject missing or reordered chunks before using document IDs."""
+    path = indexed_dir / "chunks.jsonl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    changed = lines[:1] if change == "truncate" else list(reversed(lines))
+    path.write_text("\n".join(changed) + "\n", encoding="utf-8")
+    with pytest.raises(SearchException, match="rebuild the index"):
+        search("purring", k=1, index_dir=str(indexed_dir))
+
+
+@pytest.mark.parametrize("params", [[], {"unexpected_field": True}])
+def test_invalid_index_parameters_are_wrapped(
+    indexed_dir: Path, params: Any,
+) -> None:
+    """Handle valid JSON with an invalid BM25 parameter schema."""
+    (indexed_dir / "bm25" / "params.index.json").write_text(
+        json.dumps(params), encoding="utf-8")
+    with pytest.raises(SearchException, match="load index"):
+        search("purring", k=1, index_dir=str(indexed_dir))

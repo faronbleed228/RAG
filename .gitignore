@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local corpora, indexes and generated results
+/data/raw/
+/data/processed/
+/data/output/
+/data/datasets/private/
+.DS_Store

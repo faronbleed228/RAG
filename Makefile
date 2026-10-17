@@ -1,5 +1,6 @@
 UV ?= uv
 ARGS ?= --help
+TEST_PATH ?= tests
 TEST_ARGS ?=
 
 .DEFAULT_GOAL := run
@@ -15,7 +16,7 @@ debug:
 	$(UV) run python -m pdb -m src $(ARGS)
 
 test:
-	$(UV) run python -m pytest tests $(TEST_ARGS)
+	$(UV) run python -m pytest "$(TEST_PATH)" $(TEST_ARGS)
 
 clean:
 	find . -type d \( -name .git -o -name .venv -o -name data \) -prune -o \
@@ -23,8 +24,10 @@ clean:
 		-name .pytest_cache -o -name .ruff_cache \) -prune -exec rm -rf {} +
 
 lint:
-	$(UV) run --with flake8 flake8 . --extend-exclude=data,.venv
-	$(UV) run --with mypy mypy . \
+	$(UV) run flake8 . \
+		--extend-exclude=data,.venv,tests/fixtures
+	$(UV) run mypy . \
 		--warn-return-any --warn-unused-ignores --ignore-missing-imports \
 		--disallow-untyped-defs --check-untyped-defs \
-		--explicit-package-bases --exclude '(^|/)(data|\.venv)/'
+		--explicit-package-bases \
+		--exclude '(^|/)(data|\.venv|tests/fixtures)/'

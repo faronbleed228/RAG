@@ -1,3 +1,5 @@
+"""Split UTF-8 Python, Markdown and text sources into located chunks."""
+
 from ..errors import ChunkingException
 from pathlib import Path
 import regex as re
@@ -7,7 +9,14 @@ from ..dataset_classes import MinimalSource, DataChunk
 
 
 class BaseChunk():
+    """Accumulate bounded chunks while tracking source character offsets.
+
+    Python uses AST boundaries; Markdown and text use separate strategies.
+    Chunk indices span the corpus, while character offsets restart per file.
+    """
+
     def __init__(self, max_chunk_size: int) -> None:
+        """Initialize offsets, the character limit and the default corpus."""
         self.chunk_list: list[DataChunk] = []
         self.max_chunk_size: int = max_chunk_size
 
@@ -28,7 +37,13 @@ class BaseChunk():
 
         self.code_chunk: bool = False
 
-    def update_path(self, input_directory: str | None):
+    def update_path(self, input_directory: str | None) -> None:
+        """Select an existing corpus path inside the project root.
+
+        None keeps the default vLLM corpus. Blank, incorrectly typed or
+        external paths raise ChunkingException; chunk_loop checks directory
+        suitability before scanning files.
+        """
         if input_directory is None:
             return
         try:
@@ -49,6 +64,16 @@ class BaseChunk():
             ) from e
 
     def chunk_loop(self) -> list[DataChunk]:
+        """Append chunks from Markdown, Python and text files in that order.
+
+        Validate the 10-2000 character limit and corpus directory, read UTF-8
+        sources, and return the accumulated chunk list. Empty files produce
+        no chunks. Syntax and decoding failures raise ChunkingException.
+        """
+        if (isinstance(self.max_chunk_size, bool)
+                or isinstance(self.max_chunk_size, float)):
+            raise ChunkingException(
+                "max_chunk_size has to be type integer")
         if self.max_chunk_size not in range(10, 2001):
             raise ChunkingException(
                 "max_chunk_size has to be in range 10-2000")
@@ -109,6 +134,7 @@ class BaseChunk():
                                     f"reason:{e.reason}") from e
 
     def _reset(self) -> None:
+        """Reset per-file offsets and pending text, keeping corpus indices."""
         self.end_index = 0
         self.start_index = self.end_index
         self.code_chunk = False
@@ -116,6 +142,11 @@ class BaseChunk():
 
     def _get_txt_chunk(self, chunk: str,
                        file_path: Path, last_chunk: bool = False) -> None:
+        """Emit a text chunk and retain its tail at a line boundary.
+
+        The input includes any carried-over text. At EOF, last_chunk emits
+        the remaining text without reserving a tail for another read.
+        """
         self.relative_path = str(file_path.relative_to(self.absolute_path))
         self.start_index = self.end_index
 
@@ -140,6 +171,12 @@ class BaseChunk():
 
     def _get_md_chunk(self, chunk: str, file_path: Path,
                       last_chunk: bool = False) -> None:
+        """Split Markdown near headings, paragraphs or backtick fences.
+
+        Update the fence state for emitted text and retain the unconsumed
+        tail. Fall back to the supplied character window when no suitable
+        boundary exists; last_chunk flushes the remaining text at EOF.
+        """
         self.relative_path = str(file_path.relative_to(self.absolute_path))
         self.start_index = self.end_index
 
@@ -183,6 +220,7 @@ class BaseChunk():
     def _check_code_chunk(self,
                           line_list: list[str],
                           start_state: bool, end_index: int = -1) -> None:
+        """Update fence state over lines before end_index, or all for -1."""
         if end_index == -1:
             for line in line_list[:]:
                 if line.startswith("```"):
@@ -194,6 +232,12 @@ class BaseChunk():
         self.code_chunk = start_state
 
     def _get_code_chunk(self, chunk: str, file_path: Path) -> None:
+        """Parse a full Python source and split it at top-level AST boundaries.
+
+        Group adjacent imports, include definition decorators where possible,
+        and pass oversized blocks to the iterative splitter. Invalid Python
+        raises ChunkingException.
+        """
         self.relative_path = str(
             file_path.relative_to(self.absolute_path))
 
@@ -202,7 +246,7 @@ class BaseChunk():
         except SyntaxError as e:
             raise ChunkingException(
                 f"Syntax error in {self.relative_path}, "
-                "line:{e.lineno}, msg: {e.msg}") from e
+                f"line:{e.lineno}, msg: {e.msg}") from e
 
         line_list = chunk.splitlines(keepends=True)
 
@@ -262,6 +306,11 @@ class BaseChunk():
                              first_line_index: int,
                              last_line_index: int,
                              content: str | None = None) -> None:
+        """Append a located Python chunk and advance offsets and corpus index.
+
+        Use the half-open line range unless explicit content is supplied for
+        part of a long line. Character offsets advance by the emitted length.
+        """
         if content is None:
             content = "".join(
                 line_list[first_line_index:last_line_index])
@@ -281,11 +330,27 @@ class BaseChunk():
     def _split_code_chunk(self, start_line_index: int, end_line_index: int,
                           line_list: list[str],
                           last_state: type | None) -> None:
+        """Iteratively split a half-open line range to the character limit.
+
+        Prefer method or control-flow boundaries based on last_state, then
+        line boundaries. Slice individual lines when they exceed the limit.
+        """
+        while start_line_index < end_line_index:
+            next_line = self._split_code_part(
+                start_line_index, end_line_index, line_list, last_state)
+            if next_line is None:
+                return
+            start_line_index = next_line
+
+    def _split_code_part(self, start_line_index: int, end_line_index: int,
+                         line_list: list[str],
+                         last_state: type | None) -> int | None:
+        """Emit code chunks and return the next line to process, if any."""
         if (len("".join(line_list[start_line_index:end_line_index]))
                 <= self.max_chunk_size):
             self._get_code_data_chunk(
                 line_list, start_line_index, end_line_index)
-            return
+            return None
         last_logical_index: int = -1
         if last_state == ast.ClassDef:
             for index, line in enumerate(
@@ -328,8 +393,7 @@ class BaseChunk():
 
             if (len("".join(line_list[last_logical_index:end_line_index]))
                     > self.max_chunk_size):
-                self._split_code_chunk(
-                    last_logical_index, end_line_index, line_list, last_state)
+                return last_logical_index
             else:
                 self._get_code_data_chunk(
                     line_list, last_logical_index, end_line_index)
@@ -353,14 +417,14 @@ class BaseChunk():
                 if (len("".join(line_list[start_line_index+1: end_line_index]))
                         > self.max_chunk_size):
 
-                    self._split_code_chunk(
-                        start_line_index+1, end_line_index,
-                        line_list, last_state)
+                    return start_line_index + 1
                 else:
                     self._get_code_data_chunk(
                         line_list, start_line_index+1, end_line_index)
+        return None
 
     def _create_text_chunk(self,  content: str) -> None:
+        """Append located Markdown or text content and advance corpus index."""
         self.end_index += len(content)
         data_chunk = DataChunk(index=self.general_index, content=content,
                                min_source=MinimalSource(

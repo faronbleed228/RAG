@@ -1,3 +1,5 @@
+"""Measure retrieval recall using exact paths and character-span overlap."""
+
 from pathlib import Path
 from ..errors import SearchException
 from ..dataset_classes import (
@@ -6,15 +8,30 @@ from ..dataset_classes import (
 
 
 def evaluate(student_search_results_path: str | None = None,
-             dataset_path: str | None = None) -> None:
+             dataset_path: str | None = None, k: int | None = None) -> None:
+    """Report recall at the requested k, defaulting to the saved result k.
+
+    Args:
+        student_search_results_path: Saved retrieval JSON. None selects the
+            public docs results under data/output/search_results.
+        dataset_path: Answered RagDataset JSON. None selects the public docs
+            references under data/datasets/AnsweredQuestions.
+        k: Positive cutoff no greater than the saved k, or None to use it.
+
+    Print the mean per-question recall. Question IDs and order must match.
+    A source match requires the exact path and character-span IoU >= 0.05.
+    """
     results_path, data_path = _validate_input(
         student_search_results_path, dataset_path)
     search_dataset = _get_search_dataset(results_path)
     rag_dataset = _get_answered(data_path)
-    _recall_5(search_dataset, rag_dataset)
+    selected_k = search_dataset.k if k is None else k
+    recall = _recall_at_k(search_dataset, rag_dataset, selected_k)
+    print(f"Recall_{selected_k} = {recall}")
 
 
 def _get_search_dataset(result_path: Path) -> StudentSearchResults:
+    """Load retrieval results and reject an empty question list."""
     search_dataset = StudentSearchResults.model_validate_json(
         result_path.read_text(encoding="utf-8"))
     if len(search_dataset.search_results) == 0:
@@ -24,6 +41,7 @@ def _get_search_dataset(result_path: Path) -> StudentSearchResults:
 
 
 def _get_answered(answers_path: Path) -> RagDataset:
+    """Load the reference dataset and reject an empty question list."""
     rag_dataset = RagDataset.model_validate_json(
         answers_path.read_text(encoding="utf-8"))
     if len(rag_dataset.rag_questions) == 0:
@@ -31,8 +49,16 @@ def _get_answered(answers_path: Path) -> RagDataset:
     return rag_dataset
 
 
-def _recall_5(search_dataset: StudentSearchResults,
-              rag_dataset: RagDataset) -> None:
+def _recall_at_k(search_dataset: StudentSearchResults,
+                 rag_dataset: RagDataset, k: int) -> float:
+    """Average per-question source recall over the first k retrieved spans."""
+    if not isinstance(k, int) or isinstance(k, bool) or k <= 0:
+        raise SearchException("--k has to be a positive integer")
+    if k > search_dataset.k:
+        raise SearchException(
+            "--k cannot exceed k in the saved search results")
+    if not rag_dataset.rag_questions:
+        raise SearchException("Answered Questions must not be empty")
     if len(search_dataset.search_results) != len(rag_dataset.rag_questions):
         raise SearchException(
             "Amount of questions has to be equal "
@@ -52,17 +78,17 @@ def _recall_5(search_dataset: StudentSearchResults,
         matches = 0
         for ideal_source in answer.sources:
 
-            if _get_iou(ideal_source, search_results.retrieved_sources):
+            if _get_iou(ideal_source, search_results.retrieved_sources[:k]):
                 matches += 1
         total_recall += matches / len(answer.sources)
 
-    recall = total_recall / len(rag_dataset.rag_questions)
-    print(recall)
+    return total_recall / len(rag_dataset.rag_questions)
 
 
 def _get_iou(ideal_source: MinimalSource,
              retrieved_sources: list[MinimalSource]) -> bool:
-    for retrieved_source in retrieved_sources[:5]:
+    """Check whether any supplied span matches the source at IoU >= 0.05."""
+    for retrieved_source in retrieved_sources:
         if retrieved_source.file_path != ideal_source.file_path:
             continue
         else:
@@ -87,6 +113,7 @@ def _get_iou(ideal_source: MinimalSource,
 
 def _validate_input(student_search_results_path: str | None,
                     dataset_path: str | None) -> tuple[Path, Path]:
+    """Resolve result and reference paths and require both files to exist."""
     try:
         if student_search_results_path is None:
             results_path = Path(__file__).resolve(
@@ -109,9 +136,11 @@ def _validate_input(student_search_results_path: str | None,
 
     try:
         if dataset_path is None:
-            data_path = Path(__file__).resolve(
-            ).parent.parent.parent / "data" / "datasets" / "AnsweredQuestions" \
+            data_path = (
+                Path(__file__).resolve().parent.parent.parent
+                / "data" / "datasets" / "AnsweredQuestions"
                 / "dataset_docs_public.json"
+            )
         else:
             if dataset_path.strip() == "":
                 raise SearchException(

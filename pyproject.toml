@@ -26,3 +26,9 @@ dependencies = [
 [[tool.mypy.overrides]]
 module = ["bm25s", "bm25s.*"]
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "flake8==7.4.1",
+    "mypy==2.4.0",
+]
