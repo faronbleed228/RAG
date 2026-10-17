@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["bm25s", "bm25s.*"]
+module = ["bm25s", "bm25s.*", "fire", "fire.*"]
 ignore_missing_imports = true
 
 [dependency-groups]
