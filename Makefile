@@ -24,10 +24,7 @@ clean:
 		-name .pytest_cache -o -name .ruff_cache \) -prune -exec rm -rf {} +
 
 lint:
-	$(UV) run flake8 . \
-		--extend-exclude=data,.venv,tests/fixtures
-	$(UV) run mypy . \
+	$(UV) run flake8 src tests scripts --extend-exclude=tests/fixtures
+	$(UV) run mypy src \
 		--warn-return-any --warn-unused-ignores --ignore-missing-imports \
-		--disallow-untyped-defs --check-untyped-defs \
-		--explicit-package-bases \
-		--exclude '(^|/)(data|\.venv|tests/fixtures)/'
+		--disallow-untyped-defs --check-untyped-defs
