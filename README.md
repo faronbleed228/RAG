@@ -109,19 +109,28 @@ IDs. It defaults to the saved `k`; pass `--k 5` to evaluate recall@5 from a deep
 ranking. Requested cutoffs cannot exceed the saved `k`. It does not call the
 moulinette.
 
-Local run on **2026-10-17**, macOS x86_64, Python 3.12.14, fresh index with
-23,683 chunks of at most 2000 characters, `k=5`:
+Reproduced on **2026-10-21**, Linux x86_64, Python 3.12.14, from base
+commit 62a2e50 with unchanged retrieval source. The bundled corpus contains
+2,867 third-party files and produces **23,655 chunks**, maximum size 2000, k=5.
 
-| Metric | Measured | Required |
-| --- | --- | --- |
-| Docs recall@5, 100 public questions | 80.0% | ≥ 80% |
-| Code recall@5, 99 public questions | 68.7% | ≥ 50% |
-| Full corpus indexing | 17.8 s | ≤ 300 s |
-| Batch retrieval, 200 queries | 5.2 s | ≤ 90 s |
+| Dataset | Questions | Recall@5 |
+| --- | ---: | ---: |
+| Documentation | 100 | 80.0% |
+| Code | 99 | 78.8% |
 
-Timings include Python CLI startup; the 200-query batch used all 199 public
-questions plus one repeated question. These are local results, not official
-grading scores. Other chunk sizes and generation performance were not benchmarked.
+See [machine-readable results](benchmarks/retrieval.json) for the source/corpus
+checksums, dataset checksums, package versions, evaluator output and ranking
+digests. Reproduce from the repository root:
+
+```sh
+uv run python scripts/benchmark.py --output benchmarks/retrieval.json
+```
+
+This run measures source-span retrieval recall, not generated-answer accuracy
+or an official grading score. Model inference was not run and no weights were
+downloaded. The older 2026-10-17 developer-reported timings and 68.7% code recall
+used a different local snapshot; they are not current measurements. Timing
+performance was not benchmarked in this revision.
 
 Challenges include preserving Unicode offsets, splitting oversized code and
 matching questions to identifiers. Character-slice tests, format-specific
@@ -147,13 +156,18 @@ prompt budgets, recall@k and CLI errors; model inference is checked manually.
 preserves `.git`, `.venv` and `data`. Keep large data, weights and outputs out of
 new commits.
 
-Verification on 2026-10-17: **161 tests passed** (`make test TEST_ARGS="-q"`)
-and `make lint` passed. Single and batch generation were also checked on small
-examples using cached Qwen3 weights, including real-tokenizer budget checks.
+Current CI runs the public tests and static checks on Python 3.12, with Hugging
+Face offline mode enabled. Test collection is restricted to our tests; the vLLM
+corpus remains intact and is not imported as a test suite. Torch/transformers
+packages are needed by prompt-budget mocks and CLI imports, but no model weights
+or paid APIs are used. Real generation is outside CI coverage.
+
+Maintenance CI, benchmark tooling and documentation were prepared with OpenAI
+Codex on 2026-10-21.
 
 ## Resources
 
-- [Project subject](RAG.md): requirements, data models and evaluation rules.
+- [Evaluation implementation](src/evaluate/evaluate.py): source matching and recall rules.
 - [Retrieval-Augmented Generation paper](https://arxiv.org/abs/2005.11401): background on RAG.
 - [Introduction to Information Retrieval: BM25](https://nlp.stanford.edu/IR-book/html/htmledition/okapi-bm25-a-non-binary-model-1.html): ranking fundamentals.
 - [BM25S](https://github.com/xhluca/bm25s), [Python AST](https://docs.python.org/3.12/library/ast.html), [Pydantic](https://docs.pydantic.dev/latest/) and [Python Fire](https://github.com/google/python-fire): implementation references.

@@ -221,3 +221,5 @@ __marimo__/
 /data/processed/
 /data/output/
 .DS_Store
+
+.pytest-corpus-*/

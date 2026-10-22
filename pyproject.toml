@@ -1,7 +1,7 @@
 [project]
 name = "rag"
 version = "0.1.0"
-description = "Add your description here"
+description = "Local BM25 retrieval over code and documentation with source-span evaluation"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -32,3 +32,8 @@ dev = [
     "flake8==7.4.1",
     "mypy==2.4.0",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+norecursedirs = ["data", ".venv", ".git"]

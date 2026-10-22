@@ -1,0 +1,37 @@
+{
+  "base_commit": "62a2e50a4a5890721550c340dc65208535f05da5",
+  "source_sha256": "34f3f38988617d63f11e8ab08492ea50cc35d040249d0840fe18802e0950970d",
+  "python": "3.12.14",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.39",
+  "packages": {
+    "numpy": "1.26.4",
+    "bm25s": "0.3.14",
+    "pydantic": "2.14.0",
+    "regex": "2026.9.29",
+    "scipy": "1.17.0"
+  },
+  "corpus": "data/raw/vllm-0.10.1",
+  "corpus_file_count": 2867,
+  "corpus_sha256": "706b104dbac02801fa5a8fe35a9c4a9dc18cc78a933ea57827e7c0f9634933da",
+  "max_chunk_size": 2000,
+  "k": 5,
+  "iou_threshold": 0.05,
+  "inference": "not run",
+  "results": {
+    "docs": {
+      "questions": 100,
+      "recall_at_5": 0.8,
+      "evaluate_stdout": "Recall_5 = 0.8",
+      "datasets_sha256": "ae3fa08e08c123b86bc87472a354cef00adefefcc1591b849150bbea3c1049bc",
+      "rankings_sha256": "bd5fa9864002afe42fb2271eee3b68b9162ddabfec36c9e49c7d9cc67721172c"
+    },
+    "code": {
+      "questions": 99,
+      "recall_at_5": 0.7878787878787878,
+      "evaluate_stdout": "Recall_5 = 0.7878787878787878",
+      "datasets_sha256": "fde607e4556e038c43fe390740942c9a329a10c9aa1e421efdce595cc0887669",
+      "rankings_sha256": "9472a8fbbefe6ee850c5f3ca3d5636059ad66054581bd8ec8c5a1bc615d67aec"
+    }
+  },
+  "chunks": 23655
+}
